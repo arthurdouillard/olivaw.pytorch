@@ -73,19 +73,20 @@ class ExperienceReplay:
 
 
 class PrioritizedExperienceReplay(ExperienceReplay):
-    def __init__(self, *args, alpha=0.6, beta=0.4, eta=0.00025/4, **kwargs):
+    def __init__(self, *args, alpha=0.6, beta=0.4, eta=0.00025/4, epsilon=0.01, **kwargs):
         super().__init__(*args, **kwargs)
         self.sumtree = SumTree(self.max_size)
 
         self.alpha = alpha
         self.beta = beta
         self.eta = eta
+        self.epsilon = epsilon
 
     def add(self, exp):
         super().add(exp)
         self.sumtree.add(self.end)
 
-    def update_transistion(self, errors):
+    def update_transition(self, errors):
         """Line 12 of Algo 1 of Schaul et al. 2016"""
         self.sumtree.update_priorities(self._latest_indexes, errors)
 
@@ -93,7 +94,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
         """Line 9-10 of Algo 1 of Schaul et al. 2016"""
         indexes, priorities = self.sumtree.sample(batch_size)
 
-        p = priorities ** self.alpha
+        p = (priorities + self.epsilon) ** self.alpha
         p = p / np.sum(p)
         w = (self.max_size * p) ** (-self.beta)
         is_weights = w / w.max()
@@ -108,7 +109,7 @@ class PrioritizedExperienceReplay(ExperienceReplay):
             "reward": torch.tensor(self.buffer_reward[indexes]).long(),
             "next_state": self.trsfs(self.buffer_next_state[indexes]),
             "done": torch.tensor(self.buffer_done[indexes]).long(),
-            "is_weights": is_weights
+            "is_weights": torch.tensor(is_weights)
         }
 
 
@@ -139,7 +140,7 @@ class SumTree:
 
     def sample(self, batch_size):
         max_priority = self.priorities[0]
-        indexes = np.empty((batch_size,))
+        indexes = np.zeros((batch_size,), dtype=np.uint32)
         priorities = np.empty((batch_size,))
 
         priority_interval = max_priority // batch_size
@@ -156,7 +157,7 @@ class SumTree:
             index = (tree_pos + 1) - self.max_size  # +1 because tree_pos starts at 1, not 0
             indexes[batch_index] = self.indexes[index]
 
-        return indexes, priorities
+        return indexes.astype(np.uint32), priorities
 
     def _retrieve(self, pos, sampled_priority):
         left_pos = 2 * pos + 1

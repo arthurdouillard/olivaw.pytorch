@@ -17,7 +17,7 @@ def train_dqn(args):
     behavior_policy = policy.DeepEpsilonGreedy(
         args.base_epsilon, args.min_epsilon, args.epsilon_decay
     )
-    loss_fn = F.mse_loss#F.smooth_l1_loss
+    loss_fn = nn.MSELoss(reduction="none")#F.smooth_l1_loss
 
     if args.dueling_dqn:
         dqn = networks.AtariDuelingDQN(args.action_size, args.state_size[:2], args.nb_stacked_frames, args.device)
@@ -105,6 +105,11 @@ def train_dqn(args):
             batch_G = batch_G.to(args.device)
 
             loss = loss_fn(predicted_q[torch.arange(args.batch_size), batch_actions], batch_G)
+            if args.prioritized_er:
+                er.update_transition(loss.cpu().detach().numpy())
+                loss = batch["is_weights"].to(loss.device) * loss
+            loss = loss.mean()
+
             if args.srank_reg > 0.:
                 for e in emb:
                     loss += reg.srank_penalty(e, factor=args.srank_reg)
