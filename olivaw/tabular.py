@@ -1,8 +1,11 @@
-import numpy as np
+import copy
+import collections
 import random
 
+import numpy as np
 
-class Agent:
+
+class _Agent:
     def __init__(self,
                  env,
                  nb_episodes=25000,
@@ -85,15 +88,75 @@ class Agent:
         raise NotImplementedError
 
 
-class QLearning(Agent):
+class QLearning(_Agent):
     def _update_rule(self, state, new_state, reward, action):
         residual = reward + self.gamma * np.max(self.q_table[new_state]) - self.q_table[state, action]
         self.q_table[state, action] = self.q_table[state, action] + self.learning_rate * (residual)
 
 
-class Sarsa(Agent):
+class Sarsa(_Agent):
     def _update_rule(self, state, new_state, reward, action):
         new_action = self.epsilon_greedy.sample(self.q_table, new_state, self.env)
 
         residual = reward + self.gamma * self.q_table[new_state, new_action] - self.q_table[state, action]
         self.q_table[state, action] = self.q_table[state, action] + self.learning_rate * (residual)
+
+
+class _MonteCarlo(_Agent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.q_table_freq = copy.deepcopy(self.q_table)
+
+    def learn(self):
+        log_every = 1000
+        mean_reward = []
+
+
+        for episode in range(self.nb_episodes):
+            state = self.env.reset()
+
+            episode_stats = []
+            episode_reward = 0
+            for step in range(self.max_steps):
+                action = self.epsilon_greedy.sample(self.q_table, state, self.env)
+
+                new_state, reward, done, info = self.env.step(action)
+                episode_stats.append((state, action, reward))
+
+                episode_reward += reward
+
+                if done:
+                    break # end of episode
+
+                state = new_state
+
+            self._update_rule(episode_stats)
+
+            episode_reward /= (step + 1)
+            mean_reward.append(episode_reward)
+            self.epsilon_greedy.on_episode_end()
+
+            if episode > 0 and episode % log_every == 0 and self.verbose:
+                print(f"Episode {episode}/{total_episodes}, mean reward of last {log_every} episodes: {sum(mean_reward[-log_every:])/log_every}")
+
+        return np.arange(self.nb_episodes), mean_reward
+
+
+
+class MonteCarloOnPolicy(_MonteCarlo):
+    def _update_rule(self, episode_stats):
+        G = collections.defaultdict(int)
+        cum_rewards = 0
+
+        for state, action, reward in episode_stats[::-1]:
+            cum_rewards = reward + self.gamma * cum_rewards
+            G[(state, action)] = cum_rewards
+
+        for (state, action), reward in G.items():
+            # The frequency table is there to avoid giving too much importance
+            # to a (state, action) that occured many times
+            q = self.q_table[state, action]
+            self.q_table_freq[state, action] += 1
+            n = self.q_table_freq[state, action]
+
+            self.q_table[state, action] = q * n / (n + 1) + G[(state, action)] / (n + 1)
