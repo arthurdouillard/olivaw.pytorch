@@ -1,0 +1,4 @@
+env: PongDeterministic-v4
+
+print_frequency: 50
+target_ckpt_frequency: 250
