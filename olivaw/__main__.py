@@ -16,7 +16,7 @@ def parse_args():
     parser.add_argument('--env', default='Pong-v0')
     parser.add_argument('--nb_stacked_frames', default=4, type=int)
     parser.add_argument('--update_frequency', default=1, type=int)
-    parser.add_argument('--no_op_max', default=0, type=int)
+    parser.add_argument('--no_op_max', default=30, type=int)
 
     # DQN
     parser.add_argument('--double_dqn', default=False, action='store_true')
@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument('--srank_reg', default=0., type=float)
     # noisy dqn
 
-    # Learning
+    # Training
     parser.add_argument('--optimizer', default='rmsprop', choices=['rmsprop', 'adam', 'sgd'])
     parser.add_argument('--lr', default=0.00025, type=float)
     parser.add_argument('--grad_momentum', default=0.95, type=float)
@@ -34,17 +34,20 @@ def parse_args():
     parser.add_argument('--nb_frames', default=10_000_000, type=int)
     parser.add_argument('--episode_max_step', default=5_000, type=int)
     parser.add_argument('--batch_size', default=32, type=int)
-    parser.add_argument('--target_ckpt_frequency', default=1_000, type=int)
-    parser.add_argument('--print_frequency', default=100, type=int)
+    parser.add_argument('--target_ckpt_frequency', default=10_000, type=int)
 
     parser.add_argument('--base_epsilon', default=1.0, type=float)
     parser.add_argument('--min_epsilon', default=0.1, type=float)
     parser.add_argument('--epsilon_decay', default=0.00001, type=float)
-    parser.add_argument('--test_epsilon', default=0.01, type=float)
 
     parser.add_argument('--gamma', default=0.99, type=float)
 
-    parser.add_argument('--clip_rewards', default=False, action='store_true')
+    parser.add_argument('--clip_rewards', default=True, action='store_true')
+
+    # Testing
+    parser.add_argument('--nb_test_episode', default=10, type=int)
+    parser.add_argument('--test_epsilon', default=0.001, type=float)
+    parser.add_argument('--test_frequency', default=500_000, type=int)
 
     # Experience Replay
     parser.add_argument('--pretrain_length', default=50_000, type=int)
@@ -52,6 +55,7 @@ def parse_args():
     parser.add_argument('--prioritized_er', default=False, action='store_true')
 
     # Misc
+    parser.add_argument('--print_frequency', default=50, type=int)
     parser.add_argument('--device', default=-1, type=int)
     parser.add_argument('--name', required=True)
     parser.add_argument('--save_dir', default='/local/douillard/olivaw_experiments')

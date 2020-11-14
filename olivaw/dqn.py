@@ -43,16 +43,21 @@ def train_dqn(args):
     global_step = 0
     episode_index = 0
 
+    action_names = args.env.unwrapped.get_action_meanings()
+
+    print('Training starts now!')
     while True:
         state = args.env.reset()
         stacked_frames.on_new_episode(state)
-        state = stacked_frames.get()
 
         episode_reward = 0
         episode_loss = 0.
+        action_distributions = [0 for _ in range(len(action_names))]
 
         nb_no_op = random.randint(0, args.no_op_max)
         for step_index in range(args.episode_max_step):
+            state = stacked_frames.get()
+
             # ----------------------------
             # Behavior / Exploration phase
             # ----------------------------
@@ -63,6 +68,7 @@ def train_dqn(args):
                     action = behavior_policy.sample(dqn, er.trsfs(state), args.env)
                 behavior_policy.update()
 
+                action_distributions[action] += 1
                 next_state, reward, done, _ = args.env.step(action)
                 if args.clip_rewards:
                     reward = max(-1., min(1., reward))
@@ -120,6 +126,8 @@ def train_dqn(args):
 
             if global_step % args.target_ckpt_frequency == 0:
                 target_net.load_state_dict(dqn.state_dict())
+            if global_step % args.test_frequency:
+                test_dqn(dqn, er, args)
 
             if done or step_index > args.episode_max_step:
                 break
@@ -129,7 +137,15 @@ def train_dqn(args):
 
         if episode_index > 0 and episode_index % args.print_frequency == 0:
             mean_reward = st.mean(all_rewards[:-args.print_frequency])
-            print(f"{datetime.now() - start_date}: {global_step}/{args.nb_frames}, episode: {episode_index}, reward: {round(mean_reward,2)}, epsilon: {round(behavior_policy.epsilon, 4)}")
+            mean_loss = st.mean(all_losses[:args.print_frequency])
+
+            print(f'{datetime.now() - start_date}: {global_step}/{args.nb_frames}, episode: {episode_index}, reward: {round(mean_reward,2)}, loss: {mean_loss}, epsilon: {round(behavior_policy.epsilon, 4)}')
+            total_action_taken = sum(action_distributions)
+            action_distributions = {
+                action_names[a]: round(100 * nb / total_action_taken, 2)
+                for a, nb in enumerate(action_distributions)
+            }
+            print(f'  Actions: {action_distributions}')
 
             np.save(os.path.join(args.log_dir, "losses.npy"), all_losses)
             np.save(os.path.join(args.log_dir, "rewards.npy"), all_rewards)
@@ -144,3 +160,39 @@ def train_dqn(args):
             break
     print(f"Finished in {datetime.now() - start_date}")
 
+
+
+def test_dqn(dqn, er, args):
+    dqn.eval()
+    print('Testing DQN...', end=' ')
+    mean_reward = 0
+    stacked_frames = utils.StackedFrames(args.nb_stacked_frames)
+    behavior_policy = policy.DeepEpsilonGreedy(
+        args.test_epsilon, args.test_epsilon, 0.
+    )
+
+    for _ in range(args.nb_test_episode):
+        state = args.env.reset()
+        stacked_frames.on_new_episode(state)
+
+        nb_no_op = random.randint(0, args.no_op_max)
+        for step_index in range(args.episode_max_step):
+            state = stacked_frames.get()
+
+            for _ in range (args.update_frequency):
+                if args.no_op_max > 0:
+                    action = 0
+                else:
+                    action = behavior_policy.sample(dqn, er.trsfs(state), args.env)
+
+                next_state, reward, done, _ = args.env.step(action)
+                if args.clip_rewards:
+                    reward = max(-1., min(1., reward))
+                mean_reward += reward
+                stacked_frames.on_new_step(next_state)
+
+                if done:
+                    break
+
+    print(f'Reward: {int(mean_reward / args.nb_test_episode)}')
+    dqn.train()

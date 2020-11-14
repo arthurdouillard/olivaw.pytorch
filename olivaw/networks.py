@@ -38,7 +38,7 @@ class AtariDQN(nn.Module):
         self.convnet = _AtariConvNet(frame_size, stack_size)
         self.emb = nn.Linear(self.convnet.out_dim, 512)
         self.clf = nn.Sequential(
-            nn.ELU(inplace=True),
+            nn.ELU(),
             nn.Linear(512, action_size)
         )
 
@@ -57,12 +57,12 @@ class AtariDuelingDQN(nn.Module):
         self.convnet = _AtariConvNet(frame_size, stack_size)
         self.state_emb = nn.Linear(self.convnet.out_dim, 256)
         self.state_stream = nn.Sequential(
-            nn.ELU(inplace=True),
+            nn.ELU(),
             nn.Linear(256, 1)
         )
         self.adv_emb = nn.Linear(self.convnet.out_dim, 256)
         self.advantage_stream = nn.Sequential(
-            nn.ELU(inplace=True),
+            nn.ELU(),
             nn.Linear(256, action_size)
         )
 
