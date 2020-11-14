@@ -2,6 +2,12 @@
 
 Just for fun. Still work in progress.
 
+Usage:
+
+```bash
+python3 -m olivaw --help
+```
+
 # Implemented Papers
 
 - DQN, [*Human-level control through deep reinforcement learning*, Mnih et al. Nature 2015](https://deepmind.com/research/publications/human-level-control-through-deep-reinforcement-learning)
