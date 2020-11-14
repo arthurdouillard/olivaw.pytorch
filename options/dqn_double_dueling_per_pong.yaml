@@ -2,3 +2,4 @@ env: PongNoFrameskip-v4
 
 double_dqn: true
 dueling_dqn: true
+prioritized_er: true

@@ -13,10 +13,11 @@ def parse_args():
     parser = argparse.ArgumentParser('Olivaw Reinforcement Library, at your service.')
 
     # Environment
-    parser.add_argument('--env', default='Pong-v0')
+    parser.add_argument('--env', default='PongNoFrameskip-v4')
     parser.add_argument('--nb_stacked_frames', default=4, type=int)
-    parser.add_argument('--update_frequency', default=1, type=int)
+    parser.add_argument('--update_frequency', default=4, type=int)
     parser.add_argument('--no_op_max', default=30, type=int)
+    parser.add_argument('--end_on_lost_life', default=False, action='store_true')
 
     # DQN
     parser.add_argument('--double_dqn', default=False, action='store_true')
@@ -30,6 +31,7 @@ def parse_args():
     parser.add_argument('--grad_momentum', default=0.95, type=float)
     parser.add_argument('--sqr_grad_momentum', default=0.95, type=float)
     parser.add_argument('--min_sqr_grad_momentum', default=0.01, type=float)
+    parser.add_argument('--grad_clip', default=10, type=int)
 
     parser.add_argument('--nb_frames', default=10_000_000, type=int)
     parser.add_argument('--episode_max_step', default=5_000, type=int)
@@ -78,7 +80,7 @@ def load_options(args):
     dict_args = vars(args)
     for path in args.options:
         with open(path, 'r') as f:
-            dict_args.update(yaml.load(f))
+            dict_args.update(yaml.load(f, yaml.FullLoader))
 
 
 def dump_metadata(args):

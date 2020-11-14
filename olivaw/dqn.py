@@ -45,6 +45,9 @@ def train_dqn(args):
 
     action_names = args.env.unwrapped.get_action_meanings()
 
+    for p in dqn.parameters():
+        p.register_hook(lambda grad: torch.clamp(grad, -args.grad_clip, args.grad_clip))
+
     print('Training starts now!')
     while True:
         state = args.env.reset()
@@ -55,33 +58,41 @@ def train_dqn(args):
         action_distributions = [0 for _ in range(len(action_names))]
 
         nb_no_op = random.randint(0, args.no_op_max)
+        for _ in range(nb_no_op):
+            # No op operation to avoid always starting at the same position
+            state, _, _, _ = args.env.step(action)
+            stacked_frames.on_new_episode(state)
+
         for step_index in range(args.episode_max_step):
             state = stacked_frames.get()
 
             # ----------------------------
             # Behavior / Exploration phase
             # ----------------------------
+            action = behavior_policy.sample(dqn, er.trsfs(state), args.env)
+            behavior_policy.update()
+
             for _ in range (args.update_frequency):
-                if args.no_op_max > 0:
-                    action = 0
-                else:
-                    action = behavior_policy.sample(dqn, er.trsfs(state), args.env)
-                behavior_policy.update()
-
+                global_step += 1
                 action_distributions[action] += 1
-                next_state, reward, done, _ = args.env.step(action)
-                if args.clip_rewards:
-                    reward = max(-1., min(1., reward))
-                episode_reward += reward
 
+                lifes_before = args.env.ale.lives()
+                next_state, reward, done, _ = args.env.step(action)
+                lifes_after = args.env.ale.lives()
+
+                if args.end_on_lost_life and lifes_after < lifes_before:
+                    done = True
                 if done:
                     next_state = np.zeros((210, 160, 3))  # to fix
-
                 stacked_frames.on_new_step(next_state)
+                if done:
+                    break
 
-                er.add((state, action, reward, stacked_frames.get(), done))
+            episode_reward += reward
+            if args.clip_rewards:
+                reward = max(-1., min(1., reward))
 
-                global_step += 1
+            er.add((state, action, reward, stacked_frames.get(), done))
 
             # ---------------------------
             # Target / Exploitation phase
@@ -126,7 +137,7 @@ def train_dqn(args):
 
             if global_step % args.target_ckpt_frequency == 0:
                 target_net.load_state_dict(dqn.state_dict())
-            if global_step % args.test_frequency:
+            if global_step % args.test_frequency == 0:
                 test_dqn(dqn, er, args)
 
             if done or step_index > args.episode_max_step:
@@ -186,8 +197,6 @@ def test_dqn(dqn, er, args):
                     action = behavior_policy.sample(dqn, er.trsfs(state), args.env)
 
                 next_state, reward, done, _ = args.env.step(action)
-                if args.clip_rewards:
-                    reward = max(-1., min(1., reward))
                 mean_reward += reward
                 stacked_frames.on_new_step(next_state)
 
